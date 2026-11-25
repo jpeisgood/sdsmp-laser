@@ -88,7 +88,7 @@ function SetupCheck({ st }) {
   const [busy, setBusy] = useState(false);
   const again = () => { setBusy(true); FBX.recheck(); };
   const row = (ok, title, body, key) => html`<li key=${key} class=${ok ? 'ok' : 'bad'}><i>${ok ? '✓' : '!'}</i><div><b>${title}</b>${ok ? null : body}</div></li>`;
-  if (anon) return html`<div class="lg"><div class="lg-card">
+  if (anon) return html`<div class="lgate"><div class="lg-card">
     <div class="lg-head"><${Logo} size=${64} /><div><b>SDSMP 레이저런</b><span>설정 확인</span></div></div>
     <h2 class="su-h">아직 준비 중이에요</h2>
     <p class="muted">관리자 선생님이 Firebase 설정을 마치지 않아서 들어갈 수 없습니다. 관리자 선생님께 알려 주세요.</p>
@@ -96,7 +96,7 @@ function SetupCheck({ st }) {
   </div></div>`;
   const fsOk = p.fs !== 'none' && p.fs !== 'old' && p.fs !== 'nodb' && p.fs !== 'open';
   const rtOk = p.rt !== 'rules' && p.rt !== 'open';
-  return html`<div class="lg"><div class="lg-card su">
+  return html`<div class="lgate"><div class="lg-card su">
     <div class="lg-head"><${Logo} size=${64} /><div><b>SDSMP 레이저런</b><span>Firebase 설정 점검</span></div></div>
     <h2 class="su-h">설정이 ${[!fsOk, !rtOk].filter(Boolean).length}가지 남았어요</h2>
     <p class="muted small">아래 빨간 항목만 고치고 「다시 확인」을 누르세요. 고친 뒤 반영까지 30초~1분 걸릴 수 있어요.</p>
@@ -123,10 +123,10 @@ function SetupCheck({ st }) {
 }
 function Gate({ st }) {
   if (st.phase === 'setup') return html`<${SetupCheck} st=${st} />`;
-  if (st.phase === 'config') return html`<div class="lg"><div class="lg-card"><${Logo} size=${72} /><h2>설정이 필요합니다</h2><p class="muted">${FBX.error}</p></div></div>`;
-  if (st.phase === 'loading') return html`<div class="lg"><div class="lg-card lg-wait"><${Logo} size=${72} /><p class="muted">불러오는 중…</p></div></div>`;
+  if (st.phase === 'config') return html`<div class="lgate"><div class="lg-card"><${Logo} size=${72} /><h2>설정이 필요합니다</h2><p class="muted">${FBX.error}</p></div></div>`;
+  if (st.phase === 'loading') return html`<div class="lgate"><div class="lg-card lg-wait"><${Logo} size=${72} /><p class="muted">불러오는 중…</p></div></div>`;
   const signed = !!st.user;
-  return html`<div class="lg"><div class="lg-card">
+  return html`<div class="lgate"><div class="lg-card">
     <div class="lg-head"><${Logo} size=${64} /><div><b>SDSMP 레이저런</b><span>성덕 레이저런 리그 · 기록 · 중계</span></div></div>
     <div class="lg-grid">
       <${TeacherBox} st=${st} />

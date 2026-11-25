@@ -465,10 +465,12 @@ const DEFAULT_COURSE_POINTS=[
 const DEFAULT_RANGE_AT=null; // null이면 도면의 사격장 중심(500,356)에 가장 가까운 지점
 /* 기본 배경: 학교 항공사진(성덕중, 위가 북쪽). 사진 전체가 보이도록 도면 높이에 맞추고 양옆은 비워 둔다.
    코스가 학교 밖으로 이어져도 빈 곳 위에 경로를 그릴 수 있다. 실제 코스는 영상을 받아 다시 그린다. */
-const SCHOOL_BG={href:'media/school-aerial.webp',w:1118,h:1216};
+const SCHOOL_BG={href:'media/school-top.webp',w:963,h:657};
 SCHOOL_BG.sw=560*SCHOOL_BG.w/SCHOOL_BG.h;SCHOOL_BG.sx=(1000-SCHOOL_BG.sw)/2;
-const SCHOOL_PLAY={x0:296,x1:580,y0:326,y1:495,range:{x:438,y:437}}; // 사진 속 운동장(도면 좌표)
-const SCHOOL_COURSE_POINTS=DEFAULT_COURSE_POINTS.map(p=>({x:Math.round(SCHOOL_PLAY.x0+(p.x-54)*(SCHOOL_PLAY.x1-SCHOOL_PLAY.x0)/890),y:Math.round(SCHOOL_PLAY.y0+(p.y-56)*(SCHOOL_PLAY.y1-SCHOOL_PLAY.y0)/456)}));
+/* 학교 위에서 본 사진(성덕중 건물 · 둘레 길). 기본 코스: 후문 쪽에서 출발해 건물을 한 바퀴 돌고, 아래쪽 길의 사격장을 지나 도착.
+   실제 코스는 설정 › 코스에서 점을 끌어 맞춘다. */
+const SCHOOL_PLAY={range:{x:371,y:546}};
+const SCHOOL_COURSE_POINTS=[{x:171,y:524},{x:190,y:443},{x:190,y:341},{x:190,y:239},{x:199,y:149},{x:277,y:132},{x:396,y:132},{x:516,y:132},{x:635,y:130},{x:712,y:119},{x:797,y:128},{x:878,y:183},{x:831,y:256},{x:763,y:324},{x:756,y:426},{x:754,y:535},{x:635,y:546},{x:499,y:546},{x:371,y:546},{x:260,y:546},{x:183,y:546}];
 const presetPoints=preset=>preset==='field'?DEFAULT_COURSE_POINTS:SCHOOL_COURSE_POINTS;
 
 const CFG={
@@ -486,6 +488,8 @@ const CFG={
       bgDim:typeof c.bgDim==='number'?c.bgDim:(onSchool?0.3:0.45),
       // 코스 표시 크기(사격장·로고·선 굵기). 학교 전체 사진 위에서는 작게 그린다.
       markScale:typeof c.markScale==='number'?c.markScale:(onSchool?0.55:1),
+      // 사격장(사로 칸) 크기만 따로: 코스 표시 크기에 곱한다
+      rangeScale:typeof c.rangeScale==='number'?c.rangeScale:(onSchool?0.65:1),
       custom:!!(c.points&&c.points.length>=3)
     };
   }),
@@ -3567,6 +3571,7 @@ function CourseSettings(){
   const [dim,setDim]=useState(saved.bgDim);
   const [preset,setPreset]=useState(saved.bgPreset);
   const [k,setK]=useState(saved.markScale);
+  const [rs,setRs]=useState(saved.rangeScale);
   const [busy,setBusy]=useState(false);
   const [drag,setDrag]=useState(null);
   const [draw,setDraw]=useState(false);
@@ -3580,21 +3585,21 @@ function CourseSettings(){
     return {x:Math.round(clamp(r.x,0,1000)),y:Math.round(clamp(r.y,0,560))};
   };
   const save=()=>{
-    Actions.saveConfig('course',{points:pts,rangeAt:ra,rangeAngle:angle,bgDim:dim,bgPreset:preset,markScale:k});
+    Actions.saveConfig('course',{points:pts,rangeAt:ra,rangeAngle:angle,bgDim:dim,bgPreset:preset,markScale:k,rangeScale:rs});
     toast('코스를 저장했습니다. TV 화면에 바로 반영됩니다.','ok');
   };
   // 기본 배경 바꾸기: 저장된 경로가 없으면 그 배경에 맞는 기본 경로·크기로 함께 바꾼다
   const pickPreset=v=>{
     setPreset(v);
     if(!saved.custom){setPts(presetPoints(v));setRangeAt(null);setAngle(0);}
-    if(!saved.bgId){setK(v==='field'?1:0.55);setDim(v==='field'?0.45:0.3);}
+    if(!saved.bgId){setK(v==='field'?1:0.55);setRs(v==='field'?1:0.65);setDim(v==='field'?0.45:0.3);}
   };
   const up=async f=>{
     setBusy(true);
     try{
       const r=await MediaStore.put(f,f.type||'image/jpeg');
       if(saved.bgId) MediaStore.del(saved.bgId);
-      Actions.saveConfig('course',{bgId:r.id,points:pts,rangeAt:ra,rangeAngle:angle,bgDim:dim,bgPreset:preset,markScale:k});
+      Actions.saveConfig('course',{bgId:r.id,points:pts,rangeAt:ra,rangeAngle:angle,bgDim:dim,bgPreset:preset,markScale:k,rangeScale:rs});
       toast('코스 사진을 등록했습니다. 사진 위에 경로를 그려 주세요.','ok');
     }catch(e){toast(uploadErrorText(e),'error');}
     setBusy(false);
@@ -3603,14 +3608,14 @@ function CourseSettings(){
   return html`<${Panel} title="코스 일러스트 · 사진" right=${html`<button id="course-save" class="btn btn-primary" onClick=${save}>코스 저장</button>`}>
     <div class="course-edit">
       <div class="course-stage" onPointerMove=${e=>{if(drag!=null){const p=toLocal(e);setPts(a=>a.map((x,i)=>i===drag?p:x));}}} onPointerUp=${()=>setDrag(null)} onPointerLeave=${()=>setDrag(null)}>
-        <${CourseSvg} svgRef=${svgRef} geo=${geo} rangeAt=${ra} rangeAngle=${angle} laneCount=${st.laneCount} bgId=${saved.bgId} bgDim=${dim} preset=${preset} k=${k} onBgClick=${draw?e=>{if(e.target.closest&&e.target.closest('.pt'))return;setPts(a=>[...a,toLocal(e)]);}:null}>
+        <${CourseSvg} svgRef=${svgRef} geo=${geo} rangeAt=${ra} rangeAngle=${angle} laneCount=${st.laneCount} bgId=${saved.bgId} bgDim=${dim} preset=${preset} k=${k} rs=${rs} onBgClick=${draw?e=>{if(e.target.closest&&e.target.closest('.pt'))return;setPts(a=>[...a,toLocal(e)]);}:null}>
           ${pts.map((p,i)=>html`<g key=${i} transform=${'translate('+p.x+','+p.y+') scale('+Math.max(k,.6)+')'} class="pt ${i===0?'pt-start':i===pts.length-1?'pt-end':''}" onPointerDown=${e=>{e.stopPropagation();e.preventDefault();setDrag(i);}}>
             <circle r="9"></circle><text y="3.6" text-anchor="middle">${i+1}</text>
           </g>`)}
         <//>
       </div>
       <div class="course-side">
-        <${ImageSlot} label="코스 사진" wide assetId=${saved.bgId} busy=${busy} onFile=${up} onRemove=${()=>{MediaStore.del(saved.bgId);Actions.saveConfig('course',{bgId:null});}} hint="운동장 사진을 찍어 올리면 일러스트 대신 사진 위에 코스가 표시됩니다."/>
+        ${window.SD_LASER_ONLY?null:html`<${ImageSlot} label="코스 사진" wide assetId=${saved.bgId} busy=${busy} onFile=${up} onRemove=${()=>{MediaStore.del(saved.bgId);Actions.saveConfig('course',{bgId:null});}} hint="운동장 사진을 찍어 올리면 일러스트 대신 사진 위에 코스가 표시됩니다."/>`}
         ${saved.bgId?null:html`<${Field} label="기본 배경" hint="코스 사진을 올리지 않았을 때 보이는 배경입니다.">
           <div class="seg" role="group" aria-label="기본 배경">
             <button type="button" aria-pressed=${String(preset!=='field')} onClick=${()=>pickPreset('school')}>학교 항공사진</button>
@@ -3619,6 +3624,9 @@ function CourseSettings(){
         ${saved.bgId||preset!=='field'?html`<${Field} label="사진 어둡게"><input id="course-dim" type="range" min="0" max="0.8" step="0.05" value=${dim} onInput=${e=>setDim(+e.target.value)}/><//>`:null}
         <${Field} label=${'코스 표시 크기 · '+Math.round(k*100)+'%'} hint="사격장·로고·경로 굵기를 함께 줄이거나 키웁니다. 학교 전체 사진에서는 작게 두세요.">
           <input id="course-scale" type="range" min="0.35" max="1" step="0.05" value=${k} onInput=${e=>setK(+e.target.value)}/>
+        <//>
+        <${Field} label=${'사격장 크기 · '+Math.round(rs*100)+'%'} hint="사격장(사로 칸)만 따로 줄이거나 키웁니다. 사로에 선 로고도 칸에 맞춰 작아집니다.">
+          <input id="course-range-size" type="range" min="0.3" max="1.5" step="0.05" value=${rs} onInput=${e=>setRs(+e.target.value)}/>
         <//>
         <${Field} label="사격 구간 위치" hint="코스 전체에서 사로가 있는 지점">
           <input id="course-range" type="range" min="0.05" max="0.98" step="0.005" value=${ra} onInput=${e=>setRangeAt(+e.target.value)}/>
@@ -4152,11 +4160,12 @@ function buildCourse(points){
 }
 const defaultRangeAt=(geo,preset)=>preset==='field'||!preset?geo.nearest(500,356):geo.nearest(SCHOOL_PLAY.range.x,SCHOOL_PLAY.range.y);
 /* k = 코스 표시 크기. 사격장은 k배로 그리고, 로고가 서는 사로 자리도 같은 비율로 맞춘다. */
-function rangeFrame(geo,rangeAt,angle,laneCount,k=1){
+function rangeFrame(geo,rangeAt,angle,laneCount,k=1,rs=1){
   const c=geo.at(rangeAt),rad=(angle||0)*Math.PI/180,cos=Math.cos(rad),sin=Math.sin(rad);
   const spacing=Math.min(62,380/Math.max(laneCount,1));
-  const world=(lx,ly)=>({x:c.x+(lx*cos-ly*sin)*k,y:c.y+(lx*sin+ly*cos)*k});
-  return {c,spacing,k,angle:angle||0,world,slot:lane=>world((lane-(laneCount+1)/2)*spacing,-32)};
+  const rk=k*rs; // 사격장은 코스 표시 크기 × 사격장 크기
+  const world=(lx,ly)=>({x:c.x+(lx*cos-ly*sin)*rk,y:c.y+(lx*sin+ly*cos)*rk});
+  return {c,spacing,k,rs,rk,angle:angle||0,world,slot:lane=>world((lane-(laneCount+1)/2)*spacing,-32)};
 }
 function SvgPill({x,y,text,cls,k=1}){
   const w=text.length*15.5+26;
@@ -4167,8 +4176,8 @@ function SvgPill({x,y,text,cls,k=1}){
   </g>`;
 }
 /** 경기 코스 도면. 코스 사진을 등록하면 사진 위에 같은 경로를 그린다. */
-function CourseSvg({svgRef,geo,rangeAt,rangeAngle,laneCount,bgId,bgDim,onBgClick,children,preset='school',k=1}){
-  const frame=rangeFrame(geo,rangeAt,rangeAngle,laneCount,k);
+function CourseSvg({svgRef,geo,rangeAt,rangeAngle,laneCount,bgId,bgDim,onBgClick,children,preset='school',k=1,rs=1}){
+  const frame=rangeFrame(geo,rangeAt,rangeAngle,laneCount,k,rs);
   const bg=bgId?MediaStore.url(bgId):null,school=!bgId&&preset!=='field',B=SCHOOL_BG;
   const S=geo.at(0),F=geo.at(1),R=geo.at(rangeAt*.5);
   const toC=Math.atan2(geo.cy-R.y,geo.cx-R.x);
@@ -4214,7 +4223,7 @@ function CourseSvg({svgRef,geo,rangeAt,rangeAngle,laneCount,bgId,bgDim,onBgClick
       <path class="track-run2" d=${geo.sub(rangeAt,1)} style=${k<.9?'stroke-width:'+(3.5*Math.max(k,.7)).toFixed(2)+'px':''}></path>
       ${chevrons}
     `}
-    <g transform=${'translate('+frame.c.x.toFixed(1)+','+frame.c.y.toFixed(1)+') rotate('+frame.angle+') scale('+k+')'} class="range">
+    <g transform=${'translate('+frame.c.x.toFixed(1)+','+frame.c.y.toFixed(1)+') rotate('+frame.angle+') scale('+frame.rk+')'} class="range">
       <rect class="range-box" x=${-halfW-8} y="-206" width=${halfW*2+16} height="186" rx="6"></rect>
       ${Array.from({length:laneCount},(_,i)=>{
         const lx=(i+1-(laneCount+1)/2)*frame.spacing;
@@ -4259,7 +4268,7 @@ function RaceScene({match,media,cam}){
   const geoKey=JSON.stringify(course.points);
   const geo=useMemo(()=>buildCourse(course.points),[geoKey]);
   const rangeAt=course.rangeAt==null?defaultRangeAt(geo,course.bgPreset):course.rangeAt;
-  const frame=useMemo(()=>rangeFrame(geo,rangeAt,course.rangeAngle,st.laneCount,course.markScale),[geo,rangeAt,course.rangeAngle,st.laneCount,course.markScale]);
+  const frame=useMemo(()=>rangeFrame(geo,rangeAt,course.rangeAngle,st.laneCount,course.markScale,course.rangeScale),[geo,rangeAt,course.rangeAngle,st.laneCount,course.markScale,course.rangeScale]);
   const table=raceTable(match);
   const teams=table.map(r=>{
     const c=Store.doc('classes',r.run.classId);
@@ -4268,7 +4277,7 @@ function RaceScene({match,media,cam}){
   const byId={};
   table.forEach(r=>{byId[r.run.classId]=r;});
   const model=useRef(null);
-  model.current={teams,st,geo,frame,rangeAt,byId,table,tokenScale:(Math.min(1,frame.spacing/58)*frame.k).toFixed(3)};
+  model.current={teams,st,geo,frame,rangeAt,byId,table,tokenScale:(Math.min(1,frame.spacing*frame.rs/58)*frame.k).toFixed(3)};
   const root=useRef(null);
   const orderKey=table.map(r=>r.run.classId).join();
   const prevOrder=useRef(null);
@@ -4360,7 +4369,7 @@ function RaceScene({match,media,cam}){
     <div class="ltv-left">
       ${media?html`<div class="ltv-media">${media}</div>`:null}
       <div class="ltv-course">
-        <${CourseSvg} geo=${geo} rangeAt=${rangeAt} rangeAngle=${course.rangeAngle} laneCount=${st.laneCount} bgId=${course.bgId} bgDim=${course.bgDim} preset=${course.bgPreset} k=${course.markScale}>
+        <${CourseSvg} geo=${geo} rangeAt=${rangeAt} rangeAngle=${course.rangeAngle} laneCount=${st.laneCount} bgId=${course.bgId} bgDim=${course.bgDim} preset=${course.bgPreset} k=${course.markScale} rs=${course.rangeScale}>
           ${cpList().length?html`<${CpMarks} geo=${geo} k=${Math.max(.6,course.markScale*.8)} cam=${cam}/>`:null}
           ${[...teams].reverse().map((tm,i)=>html`<${MoveToken} key=${tm.id} tm=${tm} rank=${byId[tm.id].started?byId[tm.id].rank:null}/>`)}
         <//>
@@ -6261,7 +6270,7 @@ function PointsPage(){
       </div>`}>
       <p class="muted small" style="margin:0 0 10px">번호를 끌어 실제 요원이 서는 자리로 옮기세요. 네모(□)는 카메라 지점입니다. 사격장 바로 앞뒤에는 놓을 수 없어요.</p>
       <div class="pts-map" onPointerMove=${onMove} onPointerUp=${onUp} onPointerCancel=${onUp}>
-        <${CourseSvg} svgRef=${svgRef} geo=${geo} rangeAt=${ra} rangeAngle=${course.rangeAngle} laneCount=${st.laneCount} bgId=${course.bgId} bgDim=${course.bgDim} preset=${course.bgPreset} k=${course.markScale}>
+        <${CourseSvg} svgRef=${svgRef} geo=${geo} rangeAt=${ra} rangeAngle=${course.rangeAngle} laneCount=${st.laneCount} bgId=${course.bgId} bgDim=${course.bgDim} preset=${course.bgPreset} k=${course.markScale} rs=${course.rangeScale}>
           <${CpMarks} geo=${geo} k=${Math.max(.7,course.markScale)} dragN=${dragN} tmp=${tmp} onDown=${onDown}/>
         <//>
       </div>
