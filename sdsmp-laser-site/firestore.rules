@@ -1,0 +1,77 @@
+rules_version = '2';
+// SDSMP 레이저런 · Firestore 보안 규칙
+// 역할: owner(관리자, meta/owner) · editor(선생님, 관리자 승인) · staff(체육회 지점 요원, 코드) · viewer(TV 화면, 코드)
+// 기록 · 설정은 owner·editor만 바꾸고, 모든 데이터는 역할이 있는 사람만 읽는다.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signed() { return request.auth != null; }
+    function ownerPath() { return /databases/$(database)/documents/meta/owner; }
+    function rolePath() { return /databases/$(database)/documents/roles/$(request.auth.uid); }
+    function isOwner() { return signed() && exists(ownerPath()) && get(ownerPath()).data.uid == request.auth.uid; }
+    function hasRole() { return signed() && exists(rolePath()); }
+    function isEditor() { return isOwner() || (hasRole() && get(rolePath()).data.role == 'editor'); }
+    function isMember() { return isOwner() || hasRole(); }
+    function google() { return signed() && request.auth.token.firebase.sign_in_provider == 'google.com'; }
+
+    // 규칙 버전 확인용 (사이트가 '규칙이 최신인지' 스스로 점검한다). 규칙을 고칠 때마다 숫자를 올린다.
+    match /probe/v3 {
+      allow get: if signed();
+    }
+    // 관리자 자리: 처음 한 번, 구글로 로그인한 선생님이 차지한다
+    match /meta/owner {
+      allow read: if signed();
+      allow create: if google() && !exists(ownerPath()) && request.resource.data.uid == request.auth.uid;
+    }
+    // 지점 요원 · TV 코드 (관리자만)
+    match /private/{doc} {
+      allow read, write: if isOwner();
+    }
+    // 역할: 코드를 맞게 넣으면 staff · viewer로 스스로 등록, editor는 관리자가 승인
+    match /roles/{uid} {
+      allow read: if signed() && (request.auth.uid == uid || isOwner());
+      allow create: if signed() && request.auth.uid == uid
+        && request.resource.data.role in ['staff', 'viewer']
+        && request.resource.data.code is string && request.resource.data.code.size() > 0
+        && request.resource.data.code == get(/databases/$(database)/documents/private/codes).data.get(request.resource.data.role, '');
+      allow create, update, delete: if isOwner();
+    }
+    match /joinRequests/{uid} {
+      allow create, update: if google() && request.auth.uid == uid;
+      allow read: if isOwner() || (signed() && request.auth.uid == uid);
+      allow delete: if isOwner() || (signed() && request.auth.uid == uid);
+    }
+    match /users/{uid} {
+      allow read: if isMember();
+      allow write: if isMember() && request.auth.uid == uid;
+    }
+    // 레이저런 데이터
+    match /lr_config/{id}  { allow read: if isMember(); allow write: if isEditor(); }
+    match /lr_classes/{id} { allow read: if isMember(); allow write: if isEditor(); }
+    match /lr_matches/{id} { allow read: if isMember(); allow write: if isEditor(); }
+    match /lr_runs/{id}    { allow read: if isMember(); allow write: if isEditor(); }
+    match /lr_audit/{id}   { allow read: if isMember(); allow write: if isEditor(); }
+    match /lr_media/{id}   { allow read: if isMember(); allow write: if isEditor(); }
+    match /lr_signs/{id}   { allow read: if isMember(); allow write: if isEditor(); }
+    // 코스 지점 통과 기록: 체육회 지점 요원(staff)도 자기 이름으로 남길 수 있다
+    match /lr_cp/{id} {
+      allow read: if isMember();
+      allow create, update: if (isEditor() || (hasRole() && get(rolePath()).data.role == 'staff'))
+        && request.resource.data.by == request.auth.uid;
+      allow delete: if isEditor() || (signed() && resource.data.by == request.auth.uid);
+    }
+    // TV 공지 글꼴 등 공통 TV 설정
+    match /config/{id}     { allow read: if isMember(); allow write: if isEditor(); }
+    // 활동 기록: 각자 자기 칸에만 쓰고, 관리자만 읽는다
+    match /actlog/{uid} {
+      allow read: if isOwner();
+      allow write: if isEditor() && request.auth.uid == uid;
+      match /e/{id} {
+        allow read: if isOwner();
+        allow create: if isEditor() && request.auth.uid == uid;
+        allow delete: if isOwner();
+      }
+    }
+    match /log/{id}   { allow read, delete: if isOwner(); }
+    match /admin/{id} { allow read, write: if isOwner(); }
+  }
+}

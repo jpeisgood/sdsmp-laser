@@ -1,0 +1,24 @@
+{
+  "rules": {
+    "room": {
+      ".read": "auth != null",
+      "$room": {
+        "peers": {
+          "$peer": {
+            ".write": "auth != null && (!data.exists() || data.child('by').val() === auth.uid) && (!newData.exists() || newData.child('by').val() === auth.uid)"
+          }
+        },
+        "ev": {
+          "$key": {
+            ".write": "auth != null && (!data.exists() || data.child('by').val() === auth.uid) && (!newData.exists() || newData.child('by').val() === auth.uid)"
+          }
+        }
+      }
+    },
+    "probe": {
+      "v3": {
+        ".read": "auth != null"
+      }
+    }
+  }
+}
